@@ -1,16 +1,40 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('./db');
 const { aiAnalyze } = require('./ai');
+const { aiRateLimiter } = require('./middleware/rateLimiter');
+const aiExpandedRoutes = require('./routes/aiExpanded');
+const aiNewRoutes = require('./routes/aiNew');
+const aiBacklogRoutes = require('./routes/aiBacklog');
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const app = express();
 const PORT = process.env.BACKEND_PORT || 3001;
 
-app.use(cors());
-app.use(express.json());
+// Security: helmet
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
+
+// CORS allowlist from env (comma-separated)
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:5173')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true
+}));
+app.use(express.json({ limit: '1mb' }));
 
 // ─── Helpers: snake_case <-> camelCase ───
 function snakeToCamel(str) {
@@ -121,9 +145,31 @@ features.forEach(feature => {
   const paths = [`/api/${key}`, `/api/${hyphenKey}`];
 
   paths.forEach(basePath => {
-    // GET all
+    // GET all (with pagination support)
     app.get(basePath, authenticate, async (req, res) => {
       try {
+        const page = parseInt(req.query.page) || 0;
+        const limit = parseInt(req.query.limit) || 0;
+
+        if (page > 0 && limit > 0) {
+          const offset = (page - 1) * limit;
+          const countResult = await pool.query(`SELECT COUNT(*) as count FROM ${table}`);
+          const total = parseInt(countResult.rows[0].count);
+          const result = await pool.query(
+            `SELECT * FROM ${table} ORDER BY id DESC LIMIT $1 OFFSET $2`,
+            [limit, offset]
+          );
+          return res.json({
+            data: result.rows.map(rowToCamel),
+            pagination: {
+              page,
+              limit,
+              total,
+              totalPages: Math.ceil(total / limit)
+            }
+          });
+        }
+
         const result = await pool.query(`SELECT * FROM ${table} ORDER BY id DESC`);
         res.json(result.rows.map(rowToCamel));
       } catch (err) {
@@ -190,7 +236,7 @@ features.forEach(feature => {
     if (ai) {
       const aiPaths = [`${basePath}/ai-analyze`, `${basePath}/ai/analyze`];
       aiPaths.forEach(aiPath => {
-        app.post(aiPath, authenticate, async (req, res) => {
+        app.post(aiPath, authenticate, aiRateLimiter, async (req, res) => {
           try {
             const { data, prompt } = req.body;
             let analysisData = data;
@@ -199,6 +245,24 @@ features.forEach(feature => {
               analysisData = result.rows;
             }
             const analysis = await aiAnalyze(key, analysisData, prompt);
+
+            // Persist AI result (non-blocking fire-and-forget) with ai_results JSONB
+            pool.query(
+              `INSERT INTO ai_analyses (feature, record_id, prompt_summary, response_text, model_used, user_id, ai_results, tokens_used, duration_ms)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+              [
+                key,
+                null,
+                `Bulk analysis for ${key} (${Array.isArray(analysisData) ? analysisData.length : 1} records)`,
+                analysis.analysis || '',
+                analysis.model || 'anthropic/claude-3-5-sonnet-20241022',
+                req.user?.id || null,
+                analysis.structured || { analysis: analysis.analysis, model: analysis.model, usage: analysis.usage },
+                analysis.usage?.total_tokens || null,
+                analysis.durationMs || null
+              ]
+            ).catch(err => console.error('[ai_analyses persist error]', err.message));
+
             res.json(analysis);
           } catch (err) {
             res.status(500).json({ error: err.message });
@@ -208,6 +272,22 @@ features.forEach(feature => {
     }
   });
 });
+
+// ─── Expanded AI Routes (carbon-emissions, outage-management, renewable-sources, voltage-regulation) ───
+app.use('/api', authenticate, aiExpandedRoutes);
+
+// ─── New AI Routes (predictive-maintenance-alert, grid-health-summary, energy-trading-strategy, ai-analyses) ───
+app.use('/api', authenticate, aiNewRoutes);
+
+// ─── Mechanical backlog AI Routes (demand-forecast, battery-scheduling) ───
+app.use('/api', authenticate, aiBacklogRoutes);
+app.use('/api/agentic-grid-operator', authenticate, require('./routes/agenticGridOperator'));
+app.use('/api/community-solar', authenticate, require('./routes/communitySolar'));
+app.use('/api/ev-smart-charging', authenticate, require('./routes/evSmartCharging'));
+app.use('/api/dr-auto-enroll', authenticate, require('./routes/drAutoEnroll'));
+app.use('/api/carbon-accounting', authenticate, require('./routes/carbonAccounting'));
+app.use('/api/utility-bill-optim', authenticate, require('./routes/utilityBillOptim'));
+app.use('/api/microgrid', authenticate, require('./routes/microgridManager'));
 
 // ─── Dashboard Stats ───
 app.get('/api/dashboard/stats', authenticate, async (req, res) => {
@@ -234,6 +314,42 @@ app.get('/api/dashboard/stats', authenticate, async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+// ─── Ensure ai_analyses table exists ───
+async function ensureAiAnalysesTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ai_analyses (
+        id SERIAL PRIMARY KEY,
+        feature VARCHAR(100) NOT NULL,
+        record_id VARCHAR(100),
+        prompt_summary TEXT,
+        response_text TEXT,
+        model_used VARCHAR(100),
+        user_id INTEGER,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    // Add ai_results JSONB column for structured caching
+    await pool.query(`ALTER TABLE ai_analyses ADD COLUMN IF NOT EXISTS ai_results JSONB`);
+    await pool.query(`ALTER TABLE ai_analyses ADD COLUMN IF NOT EXISTS tokens_used INTEGER`);
+    await pool.query(`ALTER TABLE ai_analyses ADD COLUMN IF NOT EXISTS duration_ms INTEGER`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_analyses_feature_record ON ai_analyses(feature, record_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_analyses_results_gin ON ai_analyses USING GIN (ai_results)`);
+    console.log('ai_analyses table ready (with ai_results JSONB)');
+  } catch (err) {
+    console.error('Failed to create ai_analyses table:', err.message);
+  }
+}
+
+
+// === Batch 03 Gaps & Frontend Mounts ===
+try {
+  const _batch03 = require('./routes/batch03Gaps');
+  if (typeof authenticateToken === 'function') app.use('/api', authenticateToken, _batch03);
+  else app.use('/api', _batch03);
+} catch (_e) { /* batch03 gap routes optional */ }
+
+app.listen(PORT, async () => {
+  await ensureAiAnalysesTable();
   console.log(`⚡ Energy Grid Optimizer API running on port ${PORT}`);
 });

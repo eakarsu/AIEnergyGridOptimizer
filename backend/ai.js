@@ -1,7 +1,54 @@
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'anthropic/claude-3-5-sonnet-20241022';
+
+// parseAIJson - 3-strategy AI JSON response parser
+// Strategy 1: direct JSON.parse
+// Strategy 2: strip markdown code fences
+// Strategy 3: brace/bracket-matching extraction
+function parseAIJson(content) {
+  if (content == null) throw new Error('parseAIJson: empty content');
+  const raw = String(content).trim();
+
+  try { return JSON.parse(raw); } catch (_) {}
+
+  let cleaned = raw;
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```[\s\S]*$/, '');
+    try { return JSON.parse(cleaned.trim()); } catch (_) {}
+  } else {
+    const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenceMatch) {
+      try { return JSON.parse(fenceMatch[1].trim()); } catch (_) {}
+    }
+  }
+
+  const objStart = cleaned.indexOf('{');
+  const arrStart = cleaned.indexOf('[');
+  let start = -1, openCh, closeCh;
+  if (objStart !== -1 && (arrStart === -1 || objStart < arrStart)) {
+    start = objStart; openCh = '{'; closeCh = '}';
+  } else if (arrStart !== -1) {
+    start = arrStart; openCh = '['; closeCh = ']';
+  }
+  if (start === -1) throw new Error('parseAIJson: no JSON found');
+
+  let depth = 0, inString = false, escape = false;
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === openCh) depth++;
+    else if (ch === closeCh) {
+      depth--;
+      if (depth === 0) return JSON.parse(cleaned.substring(start, i + 1));
+    }
+  }
+  throw new Error('parseAIJson: unbalanced braces');
+}
 
 async function aiAnalyze(featureType, data, customPrompt) {
   const prompts = {
@@ -80,13 +127,14 @@ Provide specific schedules with risk scores and cost estimates.`
 
   const prompt = prompts[featureType] || `Analyze this energy grid data and provide professional insights: ${JSON.stringify(data)}`;
 
+  const startTime = Date.now();
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'http://localhost:3001',
+        'HTTP-Referer': process.env.APP_URL || 'https://api.example.com',
         'X-Title': 'AI Energy Grid Optimizer'
       },
       body: JSON.stringify({
@@ -113,12 +161,23 @@ Provide specific schedules with risk scores and cost estimates.`
 
     const result = await response.json();
     const content = result.choices?.[0]?.message?.content || 'No analysis available';
+    const durationMs = Date.now() - startTime;
+
+    // Attempt structured parse with 3-strategy parseAIJson; capture for caching
+    let structured = null;
+    try {
+      structured = parseAIJson(content);
+    } catch (_) {
+      // not JSON; that's ok, content is markdown
+    }
 
     return {
       success: true,
       analysis: content,
+      structured,
       model: result.model || OPENROUTER_MODEL,
       usage: result.usage || {},
+      durationMs,
       timestamp: new Date().toISOString()
     };
   } catch (error) {
@@ -126,9 +185,10 @@ Provide specific schedules with risk scores and cost estimates.`
     return {
       success: false,
       error: error.message,
+      durationMs: Date.now() - startTime,
       timestamp: new Date().toISOString()
     };
   }
 }
 
-module.exports = { aiAnalyze };
+module.exports = { aiAnalyze, parseAIJson };
