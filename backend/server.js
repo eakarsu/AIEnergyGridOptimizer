@@ -273,6 +273,9 @@ features.forEach(feature => {
   });
 });
 
+// Health check (public, must precede /api authenticate middlewares below)
+app.get('/api/health', (req, res) => res.json({ status: 'ok', service: 'energy-grid-optimizer' }));
+
 // ─── Expanded AI Routes (carbon-emissions, outage-management, renewable-sources, voltage-regulation) ───
 app.use('/api', authenticate, aiExpandedRoutes);
 
@@ -348,6 +351,9 @@ try {
   if (typeof authenticateToken === 'function') app.use('/api', authenticateToken, _batch03);
   else app.use('/api', _batch03);
 } catch (_e) { /* batch03 gap routes optional */ }
+
+// ─── Custom Views (mounted BEFORE 404 / app.listen) ───
+app.use('/api/custom-views', authenticate, require('./routes/customViews'));
 
 app.listen(PORT, async () => {
   await ensureAiAnalysesTable();
