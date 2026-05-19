@@ -415,6 +415,11 @@ function FeaturePage() {
   const [aiResult, setAiResult] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [limit] = useState(25);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const token = localStorage.getItem('token');
   const headers = {
@@ -423,7 +428,10 @@ function FeaturePage() {
   };
 
   useEffect(() => {
-    if (config) fetchItems();
+    if (config) {
+      setPage(1);
+      fetchItems(1);
+    }
     // Reset state on feature change
     setSelectedItem(null);
     setEditMode(false);
@@ -433,13 +441,25 @@ function FeaturePage() {
     setAiError('');
   }, [featureKey]);
 
-  const fetchItems = async () => {
+  useEffect(() => {
+    if (config) fetchItems(page);
+  }, [page]);
+
+  const fetchItems = async (p = page) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/${config.endpoint}`, { headers });
+      const res = await fetch(`/api/${config.endpoint}?page=${p}&limit=${limit}`, { headers });
       if (res.ok) {
         const data = await res.json();
-        setItems(Array.isArray(data) ? data : data.data || []);
+        if (Array.isArray(data)) {
+          setItems(data);
+          setTotal(data.length);
+          setTotalPages(1);
+        } else {
+          setItems(data.data || []);
+          setTotal(data.pagination?.total || 0);
+          setTotalPages(data.pagination?.totalPages || 1);
+        }
       }
     } catch (err) {
       console.error('Fetch error:', err);
@@ -624,7 +644,7 @@ function FeaturePage() {
           <h1>
             <i className={`fas ${config.icon}`}></i> {config.label}
           </h1>
-          <span className="item-count">{items.length} items</span>
+          <span className="item-count">{total > 0 ? `${total} items` : `${items.length} items`}</span>
         </div>
         <div className="page-header-actions">
           {config.ai && (
@@ -695,6 +715,27 @@ function FeaturePage() {
               ))}
             </tbody>
           </table>
+          {totalPages > 1 && (
+            <div className="pagination-controls" style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '16px', alignItems: 'center' }}>
+              <button
+                className="btn btn-secondary"
+                disabled={page <= 1}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+              >
+                <i className="fas fa-chevron-left"></i> Prev
+              </button>
+              <span style={{ padding: '0 12px' }}>
+                Page {page} of {totalPages} ({total} total)
+              </span>
+              <button
+                className="btn btn-secondary"
+                disabled={page >= totalPages}
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              >
+                Next <i className="fas fa-chevron-right"></i>
+              </button>
+            </div>
+          )}
         </div>
       )}
 

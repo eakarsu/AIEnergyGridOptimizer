@@ -3,6 +3,10 @@ import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom'
 import Dashboard from './pages/Dashboard';
 import FeaturePage from './pages/FeaturePage';
 import Login from './pages/Login';
+import AICenter from './pages/AICenter';
+
+import Batch03Features from './pages/Batch03Features';
+import CustomViewsPage from './pages/CustomViewsPage';
 
 const sidebarSections = [
   {
@@ -91,6 +95,22 @@ function App() {
             {!sidebarCollapsed && <span>Dashboard</span>}
           </Link>
 
+          <Link
+            to="/ai-center"
+            className={`sidebar-item ${location.pathname === '/ai-center' ? 'active' : ''}`}
+          >
+            <i className="fas fa-brain"></i>
+            {!sidebarCollapsed && <span>AI Center</span>}
+          </Link>
+
+          <Link
+            to="/custom-views"
+            className={`sidebar-item ${location.pathname === '/custom-views' ? 'active' : ''}`}
+          >
+            <i className="fas fa-th"></i>
+            {!sidebarCollapsed && <span>Grid Views</span>}
+          </Link>
+
           {sidebarSections.map((section) => (
             <div key={section.title} className="sidebar-section">
               {!sidebarCollapsed && (
@@ -133,7 +153,10 @@ function App() {
 
       <main className="main-content">
         <Routes>
+          <Route path="/batch03" element={<Batch03Features />} />
           <Route path="/" element={<Dashboard />} />
+          <Route path="/ai-center" element={<AICenter />} />
+          <Route path="/custom-views" element={<CustomViewsPage />} />
           <Route path="/feature/:featureKey" element={<FeaturePage />} />
         </Routes>
       </main>

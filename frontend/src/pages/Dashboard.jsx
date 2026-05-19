@@ -105,11 +105,15 @@ function Dashboard() {
     const results = {};
     const promises = Object.entries(endpoints).map(async ([key, ep]) => {
       try {
-        const res = await fetch(`/api/${ep}`, { headers });
+        // Use page=1&limit=1 to fetch only pagination metadata (total count)
+        const res = await fetch(`/api/${ep}?page=1&limit=1`, { headers });
         if (res.ok) {
           const data = await res.json();
-          const items = Array.isArray(data) ? data : data.data || [];
-          results[key] = items.length;
+          if (Array.isArray(data)) {
+            results[key] = data.length;
+          } else {
+            results[key] = data.pagination?.total ?? (data.data?.length || 0);
+          }
         } else {
           results[key] = 0;
         }
