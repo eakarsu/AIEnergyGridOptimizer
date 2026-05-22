@@ -8,6 +8,11 @@ import AICenter from './pages/AICenter';
 import Batch03Features from './pages/Batch03Features';
 import CustomViewsPage from './pages/CustomViewsPage';
 
+import CodexCustomVizFeature from './pages/CodexCustomVizFeature';
+import CodexOperationsFeature from './pages/CodexOperationsFeature';
+
+import TimelineView from './pages/TimelineView';
+
 const sidebarSections = [
   {
     title: 'AI Analytics',
@@ -18,6 +23,7 @@ const sidebarSections = [
       { key: 'energy_trading', label: 'Energy Trading', icon: 'fa-exchange-alt' },
       { key: 'weather_impact', label: 'Weather Impact', icon: 'fa-cloud-sun' },
       { key: 'maintenance_schedule', label: 'Maintenance Scheduling', icon: 'fa-tools' },
+      { key: 'feeder_capacity_queue', label: 'Feeder Capacity Queue', icon: 'fa-stream' },
     ],
   },
   {
@@ -153,6 +159,10 @@ function App() {
 
       <main className="main-content">
         <Routes>
+        <Route path="/insights/timeline" element={<TimelineView />} />
+        <Route path="/codex/custom-viz" element={<CodexCustomVizFeature />} />
+        <Route path="/codex/operations" element={<CodexOperationsFeature />} />
+
           <Route path="/batch03" element={<Batch03Features />} />
           <Route path="/" element={<Dashboard />} />
           <Route path="/ai-center" element={<AICenter />} />

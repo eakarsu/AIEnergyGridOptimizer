@@ -353,6 +353,7 @@ try {
 } catch (_e) { /* batch03 gap routes optional */ }
 
 // ─── Custom Views (mounted BEFORE 404 / app.listen) ───
+app.use('/api/feeder-capacity-queue', authenticate, require('./routes/feederCapacityQueue'));
 app.use('/api/custom-views', authenticate, require('./routes/customViews'));
 
 app.listen(PORT, async () => {

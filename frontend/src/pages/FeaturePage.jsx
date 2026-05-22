@@ -198,6 +198,21 @@ const featureConfig = {
       { key: 'predictedFailureRisk', label: 'Failure Risk' },
     ],
   },
+  feeder_capacity_queue: {
+    label: 'Feeder Capacity Queue',
+    icon: 'fa-stream',
+    ai: false,
+    endpoint: 'feeder-capacity-queue',
+    columns: [
+      { key: 'feederName', label: 'Feeder' },
+      { key: 'substation', label: 'Substation' },
+      { key: 'queuedMw', label: 'Queued MW' },
+      { key: 'availableMw', label: 'Available MW' },
+      { key: 'interconnectRequests', label: 'Requests' },
+      { key: 'constraint', label: 'Constraint' },
+      { key: 'status', label: 'Status' },
+    ],
+  },
   regulatory_compliance: {
     label: 'Regulatory Compliance',
     icon: 'fa-gavel',
