@@ -4,6 +4,8 @@ import Dashboard from './pages/Dashboard';
 import FeaturePage from './pages/FeaturePage';
 import Login from './pages/Login';
 import AICenter from './pages/AICenter';
+import MissingFeaturesHub from './pages/MissingFeaturesHub';
+import ProductionReadiness from './pages/ProductionReadiness';
 
 import Batch03Features from './pages/Batch03Features';
 import CustomViewsPage from './pages/CustomViewsPage';
@@ -168,7 +170,9 @@ function App() {
           <Route path="/ai-center" element={<AICenter />} />
           <Route path="/custom-views" element={<CustomViewsPage />} />
           <Route path="/feature/:featureKey" element={<FeaturePage />} />
-        </Routes>
+                <Route path="/missing-features" element={<MissingFeaturesHub />} />
+              <Route path="/production-readiness" element={<ProductionReadiness />} />
+      </Routes>
       </main>
     </div>
   );
