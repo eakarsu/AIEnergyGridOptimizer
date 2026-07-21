@@ -11,6 +11,10 @@ const aiNewRoutes = require('./routes/aiNew');
 const aiBacklogRoutes = require('./routes/aiBacklog');
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  throw new Error('JWT_SECRET must be configured with at least 32 characters');
+}
+
 const app = express();
 const PORT = process.env.BACKEND_PORT || 3001;
 
@@ -291,6 +295,7 @@ app.use('/api/dr-auto-enroll', authenticate, require('./routes/drAutoEnroll'));
 app.use('/api/carbon-accounting', authenticate, require('./routes/carbonAccounting'));
 app.use('/api/utility-bill-optim', authenticate, require('./routes/utilityBillOptim'));
 app.use('/api/microgrid', authenticate, require('./routes/microgridManager'));
+app.use('/api/governed-grid-plans', authenticate, require('./routes/governedPlans'));
 
 // ─── Dashboard Stats ───
 app.get('/api/dashboard/stats', authenticate, async (req, res) => {
@@ -317,46 +322,10 @@ app.get('/api/dashboard/stats', authenticate, async (req, res) => {
   }
 });
 
-// ─── Ensure ai_analyses table exists ───
-async function ensureAiAnalysesTable() {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS ai_analyses (
-        id SERIAL PRIMARY KEY,
-        feature VARCHAR(100) NOT NULL,
-        record_id VARCHAR(100),
-        prompt_summary TEXT,
-        response_text TEXT,
-        model_used VARCHAR(100),
-        user_id INTEGER,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-    // Add ai_results JSONB column for structured caching
-    await pool.query(`ALTER TABLE ai_analyses ADD COLUMN IF NOT EXISTS ai_results JSONB`);
-    await pool.query(`ALTER TABLE ai_analyses ADD COLUMN IF NOT EXISTS tokens_used INTEGER`);
-    await pool.query(`ALTER TABLE ai_analyses ADD COLUMN IF NOT EXISTS duration_ms INTEGER`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_analyses_feature_record ON ai_analyses(feature, record_id)`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_ai_analyses_results_gin ON ai_analyses USING GIN (ai_results)`);
-    console.log('ai_analyses table ready (with ai_results JSONB)');
-  } catch (err) {
-    console.error('Failed to create ai_analyses table:', err.message);
-  }
-}
-
-
-// === Batch 03 Gaps & Frontend Mounts ===
-try {
-  const _batch03 = require('./routes/batch03Gaps');
-  if (typeof authenticateToken === 'function') app.use('/api', authenticateToken, _batch03);
-  else app.use('/api', _batch03);
-} catch (_e) { /* batch03 gap routes optional */ }
-
 // ─── Custom Views (mounted BEFORE 404 / app.listen) ───
 app.use('/api/feeder-capacity-queue', authenticate, require('./routes/feederCapacityQueue'));
 app.use('/api/custom-views', authenticate, require('./routes/customViews'));
 
-app.listen(PORT, async () => {
-  await ensureAiAnalysesTable();
+app.listen(PORT, () => {
   console.log(`⚡ Energy Grid Optimizer API running on port ${PORT}`);
 });
