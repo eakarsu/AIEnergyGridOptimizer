@@ -29,8 +29,8 @@ function Login({ onLogin }) {
   };
 
   const handleDemoLogin = () => {
-    setEmail('admin@energygrid.com');
-    setPassword('admin123');
+    setEmail(import.meta.env.VITE_DEMO_EMAIL || '');
+    setPassword(import.meta.env.VITE_DEMO_PASSWORD || '');
     setTimeout(() => {
       document.getElementById('login-form').requestSubmit();
     }, 100);

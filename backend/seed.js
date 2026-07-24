@@ -2,6 +2,12 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const pool = require('./db');
 const bcrypt = require('bcryptjs');
 
+function requireDemoPassword() {
+  const password = process.env.DEMO_PASSWORD || process.env.SEED_DEMO_PASSWORD || process.env.DEMO_SEED_PASSWORD || '';
+  if (password.length < 12 || password.length > 1024) throw new Error('DEMO_PASSWORD must contain 12-1024 characters');
+  return password;
+}
+
 async function seed() {
   const client = await pool.connect();
   try {
@@ -42,12 +48,12 @@ async function seed() {
       );
     `);
 
-    const hashedPassword = await bcrypt.hash('admin123', 10);
+    const hashedPassword = await bcrypt.hash(requireDemoPassword(), 10);
     await client.query(`
       INSERT INTO users (email, password, name, role)
       VALUES ($1, $2, $3, $4);
     `, ['admin@energygrid.com', hashedPassword, 'Admin User', 'admin']);
-    console.log('  -> Inserted demo user (admin@energygrid.com / admin123)');
+    console.log('Demo login users provisioned from the local environment.');
 
     // ─── 1. load_forecasts ───
     console.log('Creating load_forecasts table...');
