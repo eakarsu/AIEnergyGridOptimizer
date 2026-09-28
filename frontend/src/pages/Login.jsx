@@ -31,9 +31,6 @@ function Login({ onLogin }) {
   const handleDemoLogin = () => {
     setEmail(import.meta.env.VITE_DEMO_EMAIL || '');
     setPassword(import.meta.env.VITE_DEMO_PASSWORD || '');
-    setTimeout(() => {
-      document.getElementById('login-form').requestSubmit();
-    }, 100);
   };
 
   return (
@@ -86,7 +83,7 @@ function Login({ onLogin }) {
               required
             />
           </div>
-          <button type="submit" className="btn btn-primary login-btn" disabled={loading}>
+          <button type="submit" aria-label="Sign In" className="btn btn-primary login-btn" disabled={loading}>
             {loading ? (
               <>
                 <i className="fas fa-spinner fa-spin"></i> Signing in...
@@ -103,8 +100,8 @@ function Login({ onLogin }) {
           <span>or</span>
         </div>
 
-        <button className="btn btn-demo" onClick={handleDemoLogin}>
-          <i className="fas fa-play-circle"></i> Demo Login
+        <button aria-label="Auto Fill Demo Credentials" className="btn btn-demo" onClick={handleDemoLogin}>
+          <i className="fas fa-play-circle"></i> Auto Fill Demo Credentials
         </button>
 
         <div className="login-footer">
