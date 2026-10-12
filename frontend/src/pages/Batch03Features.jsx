@@ -34,19 +34,20 @@ export default function Batch03Features() {
   const [results, setResults] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const current = FEATURES.find(f => f.slug === active) || FEATURES[0];
 
   const sampleRequests = [
       {
-          "label": "Scenario",
-          "value": "Run Batch03 Features for a realistic customer case.\nContext: a team needs a practical recommendation based on incomplete operating data.\nGoal: identify the best action, key risks, missing information, and expected business impact.\nReturn: summary, prioritized action plan, assumptions, and follow-up questions."
+          label: 'Peak demand scenario',
+          value: JSON.stringify({ feature: current.label, scenario: 'Weekday peak demand is forecast at 118 MW against 110 MW firm feeder capacity.', context: current.desc, request: 'Identify safe operator actions, missing measurements, assumptions, and an approval path.' }, null, 2)
       },
       {
-          "label": "Data sample",
-          "value": "Analyze this Batch03 Features data sample.\nInput records:\n- Record 1: urgent, customer impact high, owner unassigned\n- Record 2: medium priority, blocked by missing data\n- Record 3: recurring issue, automation opportunity\nReturn structured findings, anomalies, recommendations, and confidence."
+          label: 'Solar and storage scenario',
+          value: JSON.stringify({ feature: current.label, scenario: 'A 4 MW solar plant is producing 3.1 MW; a 2 MWh battery reports 60% state of charge while evening demand rises.', context: current.desc, request: 'Compare dispatch options and list telemetry, limits, and permissions required before action.' }, null, 2)
       },
       {
-          "label": "Executive review",
-          "value": "Prepare an executive review for Batch03 Features.\nAudience: business owner, operations lead, and implementation team.\nInclude impact, risk, estimated effort, decision points, and a concise next-step plan."
+          label: 'Outage review scenario',
+          value: JSON.stringify({ feature: current.label, scenario: 'A feeder fault has interrupted 840 customers for 35 minutes; restoration time is unconfirmed.', context: current.desc, request: 'Prepare an executive brief with customer impact, uncertainties, safe next steps, and decision owners.' }, null, 2)
       }
   ];
 
@@ -54,7 +55,6 @@ export default function Batch03Features() {
     setInput(value);
     setError(null);
   };
-  const current = FEATURES.find(f => f.slug === active) || FEATURES[0];
 
   async function run() {
     if (!current) return;

@@ -269,6 +269,18 @@ router.get('/ai-analyses/:feature/:record_id', async (req, res) => {
   }
 });
 
+// GET /api/ai-analyses/:id (saved result detail)
+router.get('/ai-analyses/:id', async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid analysis ID' });
+  try {
+    const result = await pool.query('SELECT * FROM ai_analyses WHERE id = $1', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Analysis not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/ai-analyses (list all, paginated)
 router.get('/ai-analyses', async (req, res) => {
   try {

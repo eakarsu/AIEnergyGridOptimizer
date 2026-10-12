@@ -29,8 +29,15 @@ function Login({ onLogin }) {
   };
 
   const handleDemoLogin = () => {
-    setEmail(import.meta.env.VITE_DEMO_EMAIL || '');
-    setPassword(import.meta.env.VITE_DEMO_PASSWORD || '');
+    const demoEmail = import.meta.env.VITE_DEMO_EMAIL;
+    const demoPassword = import.meta.env.VITE_DEMO_PASSWORD;
+    if (import.meta.env.VITE_ENABLE_DEMO_CREDENTIAL_AUTOFILL !== 'true' || !demoEmail || !demoPassword) {
+      setError('Demo credentials are not configured for this local app. Enter your own account credentials.');
+      return;
+    }
+    setError('');
+    setEmail(demoEmail);
+    setPassword(demoPassword);
   };
 
   return (
@@ -100,8 +107,8 @@ function Login({ onLogin }) {
           <span>or</span>
         </div>
 
-        <button aria-label="Auto Fill Demo Credentials" className="btn btn-demo" onClick={handleDemoLogin}>
-          <i className="fas fa-play-circle"></i> Auto Fill Demo Credentials
+        <button type="button" aria-label="Fill Demo Credentials" className="btn btn-demo" onClick={handleDemoLogin}>
+          <i className="fas fa-play-circle"></i> Fill Demo Credentials
         </button>
 
         <div className="login-footer">

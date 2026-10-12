@@ -1,4 +1,9 @@
-import React, { useState } from 'react';
+
+import FullAIExamples, { useFullAIExamples } from "../components/FullAIExamples.jsx";
+import NativeAIReport from "../components/NativeAIReport";
+import NativeAIControls from "../components/NativeAIControls";
+import useNativeAIRequest from "../components/useNativeAIRequest";
+import React, { useEffect, useState } from 'react';
 
 // Tabs surface mechanical backlog AI endpoints (demand-forecast,
 // battery-scheduling) plus the existing aiNew endpoints
@@ -90,6 +95,12 @@ const tabs = [
   },
 ];
 
+const fieldExamples = {
+  region: ['New York City, NY', 'Chicago, IL', 'Los Angeles, CA'],
+  horizon_hours: [12, 24, 48],
+  time_horizon_hours: [12, 24, 48],
+};
+
 function parseBold(str) {
   const parts = str.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
@@ -149,11 +160,43 @@ function renderMarkdown(text) {
 }
 
 function AICenter() {
+  const fullAIExamples = useFullAIExamples();
+
+  const nativeAIRequest = useNativeAIRequest();
+
   const [activeTab, setActiveTab] = useState(tabs[0].key);
   const [formState, setFormState] = useState({});
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [history, setHistory] = useState([]);
+  const [historyError, setHistoryError] = useState('');
+  const [savedAnalysis, setSavedAnalysis] = useState(null);
+
+  const loadHistory = async () => {
+    try {
+      const res = await fetch('/api/ai-analyses?limit=20', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (!res.ok) throw new Error(`History unavailable (${res.status})`);
+      const body = await res.json();
+      setHistory(body.data || []);
+      setHistoryError('');
+    } catch (err) { setHistoryError(err.message); }
+  };
+
+  useEffect(() => { loadHistory(); }, []);
+
+  const openSavedAnalysis = async (id) => {
+    setHistoryError('');
+    try {
+      const res = await fetch(`/api/ai-analyses/${id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (!res.ok) throw new Error(`Saved analysis unavailable (${res.status})`);
+      setSavedAnalysis(await res.json());
+    } catch (err) { setHistoryError(err.message); }
+  };
 
   const tab = tabs.find(t => t.key === activeTab);
   const formValues = formState[activeTab] || {};
@@ -166,6 +209,8 @@ function AICenter() {
   };
 
   const switchTab = (key) => {
+    nativeAIRequest.cancel();
+    setLoading(false);
     setActiveTab(key);
     setResult(null);
     setError('');
@@ -196,11 +241,11 @@ function AICenter() {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       };
-      const res = await fetch(tab.endpoint, {
+      const res = await nativeAIRequest.run((signal) => fetch(tab.endpoint, { ...({
         method: 'POST',
         headers,
         body: JSON.stringify(buildBody()),
-      });
+      }), ...({ signal }) }).then(async (response) => { await response.clone().arrayBuffer(); return response; }));
 
       if (res.status === 503) {
         let detail = 'AI service is not configured (missing API key).';
@@ -219,6 +264,7 @@ function AICenter() {
         return;
       }
       setResult(data);
+      loadHistory();
     } catch (err) {
       setError('Failed to reach AI service. ' + (err?.message || ''));
     } finally {
@@ -251,7 +297,7 @@ function AICenter() {
   })();
 
   return (
-    <div className="feature-page">
+    <NativeAIControls busy={nativeAIRequest.busy} onCancel={nativeAIRequest.cancel} context="Energy Grid Optimizer"><div data-full-ai-workspace="AICenter"><FullAIExamples controller={fullAIExamples} disabled={Boolean(loading)} /><div className="feature-page">
       <div className="page-header">
         <div className="page-header-left">
           <h1>
@@ -290,7 +336,7 @@ function AICenter() {
                   max={f.max}
                   placeholder={f.placeholder || ''}
                   value={formValues[f.key] !== undefined ? formValues[f.key] : (f.defaultValue !== undefined ? f.defaultValue : '')}
-                  onChange={(e) => setField(f.key, e.target.value)}
+                  onChange={(e) => setField(f.key, e.target.value)} data-full-ai-field={fullAIExamples.bind({ current: formValues[f.key] !== undefined ? formValues[f.key] : (f.defaultValue !== undefined ? f.defaultValue : ''), change: (e) => setField(f.key, e.target.value), label: f.label, sample: fieldExamples[f.key], reference: f.key === 'storage_id' || f.key === 'location_id', manual: false, json: false }, "p1-9858", [activeTab, f.key].join(":"))}
                 />
               </div>
             ))}
@@ -338,12 +384,29 @@ function AICenter() {
               </div>
             </div>
             <div className="ai-results-body">
-              {renderMarkdown(analysisText)}
+              <NativeAIReport response={result} />
             </div>
           </div>
         )}
       </div>
-    </div>
+      <section className="ai-history" aria-label="Saved AI analyses">
+        <h2>Saved AI analyses</h2>
+        <p>Open a saved result to review its structured findings.</p>
+        <button type="button" className="btn btn-secondary" onClick={loadHistory}>Refresh history</button>
+        {historyError && <p role="alert">{historyError}</p>}
+        {history.map((entry) => <button className="ai-history-row" type="button" key={entry.id} onClick={() => openSavedAnalysis(entry.id)}>
+          <span><strong>{entry.prompt_summary || entry.feature}</strong><br />{entry.feature}</span>
+          <span>{entry.created_at ? new Date(entry.created_at).toLocaleString() : ''}</span>
+        </button>)}
+        {!history.length && !historyError && <p>No saved analyses are available.</p>}
+      </section>
+      {savedAnalysis && <div className="ai-center-overlay" role="presentation" onClick={() => setSavedAnalysis(null)}>
+        <div className="ai-center-dialog" role="dialog" aria-modal="true" aria-label="Saved AI analysis" onClick={(event) => event.stopPropagation()}>
+          <header><h2>Saved AI analysis</h2><button type="button" className="btn btn-secondary" onClick={() => setSavedAnalysis(null)}>Close</button></header>
+          <div className="ai-dialog-body"><NativeAIReport title={savedAnalysis.prompt_summary || savedAnalysis.feature} response={savedAnalysis.ai_results ?? savedAnalysis.response_text ?? ''} model={savedAnalysis.model_used} tokens={savedAnalysis.tokens_used} /></div>
+        </div>
+      </div>}
+    </div></div></NativeAIControls>
   );
 }
 

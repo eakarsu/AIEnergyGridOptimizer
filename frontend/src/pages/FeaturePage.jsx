@@ -1,3 +1,6 @@
+import NativeAIReport from "../components/NativeAIReport";
+import NativeAIControls from "../components/NativeAIControls";
+import useNativeAIRequest from "../components/useNativeAIRequest";
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -415,6 +418,8 @@ function renderMarkdown(text) {
 }
 
 function FeaturePage() {
+  const nativeAIRequest = useNativeAIRequest();
+
   const { featureKey } = useParams();
   const config = featureConfig[featureKey];
 
@@ -546,11 +551,11 @@ function FeaturePage() {
     try {
       const body = {};
       if (aiPrompt.trim()) body.prompt = aiPrompt.trim();
-      const res = await fetch(`/api/${config.endpoint}/ai/analyze`, {
+      const res = await nativeAIRequest.run((signal) => fetch(`/api/${config.endpoint}/ai/analyze`, { ...({
         method: 'POST',
         headers,
         body: JSON.stringify(body),
-      });
+      }), ...({ signal }) }).then(async (response) => { await response.clone().arrayBuffer(); return response; }));
       if (res.ok) {
         const data = await res.json();
         setAiResult(data);
@@ -957,9 +962,9 @@ function FeaturePage() {
               </button>
             </div>
             <div className="modal-body">
-              <div className="ai-prompt-section">
+              <NativeAIControls busy={nativeAIRequest.busy} onCancel={nativeAIRequest.cancel} context="Energy Grid Optimizer"><div className="ai-prompt-section">
                 <label>Custom Prompt (optional)</label>
-                <textarea
+                <textarea data-ai-field="aiPrompt"
                   value={aiPrompt}
                   onChange={(e) => setAiPrompt(e.target.value)}
                   placeholder={`Ask AI anything about your ${config.label.toLowerCase()} data...`}
@@ -980,7 +985,7 @@ function FeaturePage() {
                     </>
                   )}
                 </button>
-              </div>
+              </div></NativeAIControls>
 
               {aiError && (
                 <div className="ai-error">
@@ -1008,7 +1013,7 @@ function FeaturePage() {
                     )}
                   </div>
                   <div className="ai-results-body">
-                    {renderMarkdown(aiResult.analysis || aiResult.result || aiResult.message || JSON.stringify(aiResult, null, 2))}
+                    <NativeAIReport response={aiResult} />
                   </div>
                 </div>
               )}
