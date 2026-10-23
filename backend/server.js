@@ -324,6 +324,7 @@ app.get('/api/dashboard/stats', authenticate, async (req, res) => {
 
 // ─── Custom Views (mounted BEFORE 404 / app.listen) ───
 app.use('/api/feeder-capacity-queue', authenticate, require('./routes/feederCapacityQueue'));
+app.use('/api/feature-pack', authenticate, require('./routes/featurePack').createRouter(authenticate));
 app.use('/api/custom-views', authenticate, require('./routes/customViews'));
 
 app.listen(PORT, () => {
